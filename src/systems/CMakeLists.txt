@@ -3,7 +3,8 @@
 #              SOURCES <sources>
 #              [PUBLIC_LINK_LIBS <libraries...>]
 #              [PRIVATE_LINK_LIBS <libraries...>]
-#              [PRIVATE_COMPILE_DEFS <definitions...>])
+#              [PRIVATE_COMPILE_DEFS <definitions...>]
+#              [INSTALL_HEADERS <headers...>])
 #
 # Add a system component to Ignition Gazebo.
 #
@@ -17,11 +18,13 @@
 #
 # [PRIVATE_COMPILE_DEFS]: Specify a list of private compile definitions to add to target.
 #
+# [INSTALL_HEADERS]: Specify a list of headers to install.
+#
 function(gz_add_system system_name)
 
   set(options)
   set(oneValueArgs)
-  set(multiValueArgs SOURCES PUBLIC_LINK_LIBS PRIVATE_LINK_LIBS PRIVATE_COMPILE_DEFS)
+  set(multiValueArgs SOURCES PUBLIC_LINK_LIBS PRIVATE_LINK_LIBS PRIVATE_COMPILE_DEFS INSTALL_HEADERS)
 
   cmake_parse_arguments(gz_add_system "${options}" "${oneValueArgs}" "${multiValueArgs}" ${ARGN})
 
@@ -63,6 +66,13 @@ function(gz_add_system system_name)
       PRIVATE
         ${gz_add_system_PRIVATE_COMPILE_DEFS}
     )
+  endif()
+
+  if (gz_add_system_INSTALL_HEADERS)
+    install(
+      FILES ${gz_add_system_INSTALL_HEADERS}
+      DESTINATION ${IGN_INCLUDE_INSTALL_DIR_FULL}/ignition/${IGN_DESIGNATION}/${system_name}
+      COMPONENT headers)
   endif()
 
   # Note that plugins are currently being installed in 2 places. /lib and the plugin dir
@@ -123,6 +133,7 @@ add_subdirectory(physics)
 add_subdirectory(pose_publisher)
 add_subdirectory(scene_broadcaster)
 add_subdirectory(sensors)
+add_subdirectory(test_helper)
 add_subdirectory(thermal)
 add_subdirectory(thruster)
 add_subdirectory(touch_plugin)
