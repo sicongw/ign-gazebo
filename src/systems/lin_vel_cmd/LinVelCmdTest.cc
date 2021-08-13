@@ -1,6 +1,5 @@
 #include "LinVelCmdTest.hh"
 
-#include "ignition/gazebo/components/LinearVelocity.hh"
 #include "ignition/gazebo/components/LinearVelocityCmd.hh"
 #include "ignition/gazebo/components/Model.hh"
 
@@ -24,8 +23,8 @@ void LinVelCmdTest::Configure(const Entity &_entity,
 {
   ent = _entity;
    if (!ecm.EntityHasComponentType(_entity,
-     components::LinearVelocity().TypeId()))
-     ecm.CreateComponent(_entity, components::LinearVelocity());
+     components::LinearVelocityCmd().TypeId()))
+     ecm.CreateComponent(_entity, components::LinearVelocityCmd());
 
 }
 
@@ -35,7 +34,7 @@ void LinVelCmdTest::PreUpdate(const UpdateInfo &_info,
   if (_info.paused)
     return;
 
-  auto lin_vel_cmp = _ecm.Component<components::LinearVelocity>(ent);
+  auto lin_vel_cmp = _ecm.Component<components::LinearVelocityCmd>(ent);
   auto lin_vel = lin_vel_cmp->Data()[0];
 
   lin_vel = std::min(lin_vel + 0.01, 2.0);
