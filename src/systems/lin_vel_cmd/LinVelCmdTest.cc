@@ -1,5 +1,6 @@
 #include "LinVelCmdTest.hh"
 
+#include "ignition/gazebo/components/LinearVelocity.hh"
 #include "ignition/gazebo/components/LinearVelocityCmd.hh"
 #include "ignition/gazebo/components/Model.hh"
 
@@ -17,23 +18,35 @@ LinVelCmdTest::~LinVelCmdTest()
 {
 }
 
+void LinVelCmdTest::Configure(const Entity &_entity,
+    const std::shared_ptr<const sdf::Element> &sdf,
+    EntityComponentManager& ecm, EventManager&)
+{
+  ent = _entity;
+   if (!ecm.EntityHasComponentType(_entity,
+     components::LinearVelocity().TypeId()))
+     ecm.CreateComponent(_entity, components::LinearVelocity());
+
+}
+
 void LinVelCmdTest::PreUpdate(const UpdateInfo &_info,
     EntityComponentManager &_ecm)
 {
   if (_info.paused)
     return;
 
-  _ecm.Each<components::Model>(
-      [&](const Entity &_entity, components::Model *) -> bool
-      {
-        // apply a linear velocity of 1m/s along the x axis
-        _ecm.SetComponentData<components::LinearVelocityCmd>(
-            _entity, {1, 0, 0});
-        return true;
-      });
+  auto lin_vel_cmp = _ecm.Component<components::LinearVelocity>(ent);
+  auto lin_vel = lin_vel_cmp->Data()[0];
+
+  lin_vel = std::min(lin_vel + 0.01, 2.0);
+
+  igndbg << "Setting velocity " << lin_vel << " to entity " << ent << std::endl;
+  _ecm.SetComponentData<components::LinearVelocityCmd>(
+      ent, {lin_vel, 0, 0});
 }
 
 IGNITION_ADD_PLUGIN(LinVelCmdTest, System,
+  LinVelCmdTest::ISystemConfigure,
   LinVelCmdTest::ISystemPreUpdate
 )
 

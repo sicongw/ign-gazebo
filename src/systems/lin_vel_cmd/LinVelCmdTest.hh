@@ -10,6 +10,7 @@ namespace gazebo
 {
   class LinVelCmdTest:
     public System,
+    public ISystemConfigure,
     public ISystemPreUpdate
   {
     public: LinVelCmdTest();
@@ -18,6 +19,12 @@ namespace gazebo
 
     public: void PreUpdate(const UpdateInfo &_info,
                 EntityComponentManager &_ecm) final;
+
+    public: void Configure(const Entity &_entity,
+                const std::shared_ptr<const sdf::Element> &sdf,
+                EntityComponentManager& ecm, EventManager&);
+
+    private: Entity ent;
   };
 }
 }
