@@ -1,5 +1,7 @@
 #include "LinVelCmdTest.hh"
 
+#include "ignition/gazebo/components/CanonicalLink.hh"
+#include "ignition/gazebo/components/LinearVelocity.hh"
 #include "ignition/gazebo/components/LinearVelocityCmd.hh"
 #include "ignition/gazebo/components/Model.hh"
 
@@ -22,9 +24,14 @@ void LinVelCmdTest::Configure(const Entity &_entity,
     EntityComponentManager& ecm, EventManager&)
 {
   ent = _entity;
-   if (!ecm.EntityHasComponentType(_entity,
-     components::LinearVelocityCmd().TypeId()))
-     ecm.CreateComponent(_entity, components::LinearVelocityCmd());
+  can_ent = ecm.Component<components::ModelCanonicalLink>(_entity)->Data();
+
+  if (!ecm.EntityHasComponentType(ent,
+    components::LinearVelocityCmd().TypeId()))
+    ecm.CreateComponent(ent, components::LinearVelocityCmd());
+  if (!ecm.EntityHasComponentType(can_ent,
+    components::LinearVelocity().TypeId()))
+    ecm.CreateComponent(can_ent, components::LinearVelocity());
 
 }
 
@@ -34,7 +41,8 @@ void LinVelCmdTest::PreUpdate(const UpdateInfo &_info,
   if (_info.paused)
     return;
 
-  auto lin_vel_cmp = _ecm.Component<components::LinearVelocityCmd>(ent);
+  auto lin_vel_cmd_cmp = _ecm.Component<components::LinearVelocityCmd>(ent);
+  auto lin_vel_cmp = _ecm.Component<components::LinearVelocity>(can_ent);
   auto lin_vel = lin_vel_cmp->Data()[0];
 
   lin_vel = std::min(lin_vel + 0.01, 2.0);

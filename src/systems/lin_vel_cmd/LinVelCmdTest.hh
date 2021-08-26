@@ -25,6 +25,8 @@ namespace gazebo
                 EntityComponentManager& ecm, EventManager&);
 
     private: Entity ent;
+
+    private: Entity can_ent;
   };
 }
 }
