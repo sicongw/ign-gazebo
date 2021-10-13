@@ -232,10 +232,22 @@ Plotting::~Plotting()
 }
 
 //////////////////////////////////////////
-void Plotting::LoadConfig(const tinyxml2::XMLElement *)
+void Plotting::LoadConfig(const tinyxml2::XMLElement *_elem)
 {
   if (this->title.empty())
     this->title = "Plotting";
+
+  if (nullptr == _elem)
+    return;
+
+  this->dataPtr->plottingIface->onComponentSubscribe(
+    QString("21"), QString("6612894081701502240"), QString("Pose3d"), QString("y"), 1);
+
+
+// TODO the equivalent of
+
+        chart.addSeries(componentID, displayText);
+        infoRect.addComponent(entity, typeId, type, attribute, typeName, displayText);
 }
 
 //////////////////////////////////////////////////
