@@ -405,6 +405,7 @@ void ComponentInspector::LoadConfig(const tinyxml2::XMLElement *)
   // Connect model
   this->Context()->setContextProperty(
       "ComponentsModel", &this->dataPtr->componentsModel);
+  this->Context()->setContextProperty("ComponentInspectorImpl", this);
 }
 
 //////////////////////////////////////////////////

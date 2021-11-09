@@ -68,7 +68,7 @@ Rectangle {
   // Send new pose to C++
   function sendPose() {
     // TODO(anyone) There's a loss of precision when these values get to C++
-    componentInspector.onPose(
+    ComponentInspectorImpl.OnPose(
       xItem.value,
       yItem.value,
       zItem.value,
@@ -214,7 +214,7 @@ Rectangle {
           Loader {
             id: xLoader
             anchors.fill: parent
-            property double numberValue: model.data[0]
+            property double numberValue: model ? model.data[0] : 0.0
             sourceComponent: readOnly ? readOnlyNumber : writableNumber
             onLoaded: {
               xItem = xLoader.item
@@ -251,7 +251,7 @@ Rectangle {
           Loader {
             id: rollLoader
             anchors.fill: parent
-            property double numberValue: model.data[3]
+            property double numberValue: model ? model.data[3] : 0.0
             sourceComponent: readOnly ? readOnlyNumber : writableNumber
             onLoaded: {
               rollItem = rollLoader.item
@@ -294,7 +294,7 @@ Rectangle {
           Loader {
             id: yLoader
             anchors.fill: parent
-            property double numberValue: model.data[1]
+            property double numberValue: model ? model.data[1] : 0.0
             sourceComponent: readOnly ? readOnlyNumber : writableNumber
             onLoaded: {
               yItem = yLoader.item
@@ -330,7 +330,7 @@ Rectangle {
           Loader {
             id: pitchLoader
             anchors.fill: parent
-            property double numberValue: model.data[4]
+            property double numberValue: model ? model.data[4] : 0.0
             sourceComponent: readOnly ? readOnlyNumber : writableNumber
             onLoaded: {
               pitchItem = pitchLoader.item
@@ -366,7 +366,7 @@ Rectangle {
           Loader {
             id: zLoader
             anchors.fill: parent
-            property double numberValue: model.data[2]
+            property double numberValue: model ? model.data[2] : 0.0
             sourceComponent: readOnly ? readOnlyNumber : writableNumber
             onLoaded: {
               zItem = zLoader.item
@@ -402,7 +402,7 @@ Rectangle {
           Loader {
             id: yawLoader
             anchors.fill: parent
-            property double numberValue: model.data[5]
+            property double numberValue: model ? model.data[5] : 0.0
             sourceComponent: readOnly ? readOnlyNumber : writableNumber
             onLoaded: {
               yawItem = yawLoader.item
