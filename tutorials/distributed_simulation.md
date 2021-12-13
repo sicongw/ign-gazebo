@@ -59,7 +59,7 @@ The primary instance will read several command line options to dictate its behav
 
 * **--network-role=primary** - Dictates that the role of this
     participant is a Primary. Capitalization of "primary" is not important.
-* **--network-secondaries=<N>** - The number of secondaries expected
+* **--network-secondaries=`<N>`** - The number of secondaries expected
     to join. Simulation will not begin until **N** secondaries have been
     discovered.
 
@@ -106,7 +106,7 @@ keeps all performers loaded, but performs no physics simulation.
 Stepping happens in 2 stages: the primary update and the secondaries update,
 according to the diagram below:
 
-<img src="https://raw.githubusercontent.com/ignitionrobotics/ign-gazebo/master/tutorials/files/distributed_step.png"/>
+<img src="https://raw.githubusercontent.com/ignitionrobotics/ign-gazebo/ign-gazebo3/tutorials/files/distributed_step.png"/>
 
 1. The primary publishes a `SimulationStep` message on the `/step` topic,
 containing:

@@ -78,6 +78,10 @@ class ignition::gazebo::systems::SensorsPrivate
   /// sea level
   public: double ambientTemperature = 288.15;
 
+  /// \brief Temperature gradient with respect to increasing altitude at sea
+  /// level in units of K/m.
+  public: double ambientTemperatureGradient = -0.0065;
+
   /// \brief Keep track of cameras, in case we need to handle stereo cameras.
   /// Key: Camera's parent scoped name
   /// Value: Pointer to camera
@@ -170,6 +174,12 @@ class ignition::gazebo::systems::SensorsPrivate
 
   /// \brief Stop the rendering thread
   public: void Stop();
+
+  /// \brief Use to optionally set the background color.
+  public: std::optional<math::Color> backgroundColor;
+
+  /// \brief Use to optionally set the ambient light.
+  public: std::optional<math::Color> ambientLight;
 };
 
 //////////////////////////////////////////////////
@@ -190,6 +200,10 @@ void SensorsPrivate::WaitForInit()
     {
       // Only initialize if there are rendering sensors
       igndbg << "Initializing render context" << std::endl;
+      if (this->backgroundColor)
+        this->renderUtil.SetBackgroundColor(*this->backgroundColor);
+      if (this->ambientLight)
+        this->renderUtil.SetAmbientLight(*this->ambientLight);
       this->renderUtil.Init();
       this->scene = this->renderUtil.Scene();
       this->initialized = true;
@@ -365,9 +379,18 @@ void Sensors::Configure(const Entity &/*_id*/,
     EventManager &_eventMgr)
 {
   igndbg << "Configuring Sensors system" << std::endl;
+
   // Setup rendering
   std::string engineName =
       _sdf->Get<std::string>("render_engine", "ogre2").first;
+
+  // Get the background color, if specified.
+  if (_sdf->HasElement("background_color"))
+    this->dataPtr->backgroundColor = _sdf->Get<math::Color>("background_color");
+
+  // Get the ambient light, if specified.
+  if (_sdf->HasElement("ambient_light"))
+    this->dataPtr->ambientLight = _sdf->Get<math::Color>("ambient_light");
 
   this->dataPtr->renderUtil.SetEngineName(engineName);
   this->dataPtr->renderUtil.SetEnableSensors(true,
@@ -386,6 +409,8 @@ void Sensors::Configure(const Entity &/*_id*/,
     {
       auto atmosphereSdf = atmosphere->Data();
       this->dataPtr->ambientTemperature = atmosphereSdf.Temperature().Kelvin();
+      this->dataPtr->ambientTemperatureGradient =
+          atmosphereSdf.TemperatureGradient();
     }
 
     // Set render engine if specified from command line
@@ -407,6 +432,18 @@ void Sensors::Configure(const Entity &/*_id*/,
 }
 
 //////////////////////////////////////////////////
+void Sensors::Update(const UpdateInfo &_info,
+                     EntityComponentManager &_ecm)
+{
+  IGN_PROFILE("Sensors::Update");
+  std::unique_lock<std::mutex> lock(this->dataPtr->renderMutex);
+  if (this->dataPtr->running && this->dataPtr->initialized)
+  {
+    this->dataPtr->renderUtil.UpdateECM(_info, _ecm);
+  }
+}
+
+//////////////////////////////////////////////////
 void Sensors::PostUpdate(const UpdateInfo &_info,
                          const EntityComponentManager &_ecm)
 {
@@ -420,17 +457,19 @@ void Sensors::PostUpdate(const UpdateInfo &_info,
         << "s]. System may not work properly." << std::endl;
   }
 
-  if (!this->dataPtr->initialized &&
-      (_ecm.HasComponentType(components::Camera::typeId) ||
-       _ecm.HasComponentType(components::DepthCamera::typeId) ||
-       _ecm.HasComponentType(components::GpuLidar::typeId) ||
-       _ecm.HasComponentType(components::RgbdCamera::typeId) ||
-       _ecm.HasComponentType(components::ThermalCamera::typeId)))
+
   {
-    igndbg << "Initialization needed" << std::endl;
     std::unique_lock<std::mutex> lock(this->dataPtr->renderMutex);
-    this->dataPtr->doInit = true;
-    this->dataPtr->renderCv.notify_one();
+    if (!this->dataPtr->initialized &&
+        (_ecm.HasComponentType(components::Camera::typeId) ||
+         _ecm.HasComponentType(components::DepthCamera::typeId) ||
+         _ecm.HasComponentType(components::GpuLidar::typeId) ||
+         _ecm.HasComponentType(components::RgbdCamera::typeId) ||
+         _ecm.HasComponentType(components::ThermalCamera::typeId))) {
+      igndbg << "Initialization needed" << std::endl;
+      this->dataPtr->doInit = true;
+      this->dataPtr->renderCv.notify_one();
+    }
   }
 
   if (this->dataPtr->running && this->dataPtr->initialized)
@@ -564,6 +603,27 @@ std::string Sensors::CreateSensor(const Entity &_entity,
   if (nullptr != thermalSensor)
   {
     thermalSensor->SetAmbientTemperature(this->dataPtr->ambientTemperature);
+
+    // temperature gradient is in kelvin per meter - typically change in
+    // temperature over change in altitude. However the implementation of
+    // thermal sensor in ign-sensors varies temperature for all objects in its
+    // view. So we will do an approximation based on camera view's vertical
+    // distance.
+    auto camSdf = _sdf.CameraSensor();
+    double farClip = camSdf->FarClip();
+    double angle = camSdf->HorizontalFov().Radian();
+    double aspect = camSdf->ImageWidth() / camSdf->ImageHeight();
+    double vfov = 2.0 * atan(tan(angle / 2.0) / aspect);
+    double height = tan(vfov / 2.0) * farClip * 2.0;
+    double tempRange =
+        std::fabs(this->dataPtr->ambientTemperatureGradient * height);
+    thermalSensor->SetAmbientTemperatureRange(tempRange);
+
+    ignmsg << "Setting ambient temperature to "
+           << this->dataPtr->ambientTemperature << " Kelvin and gradient to "
+           << this->dataPtr->ambientTemperatureGradient << " K/m. "
+           << "The resulting temperature range is: " << tempRange
+           << " Kelvin." << std::endl;
   }
 
   return sensor->Name();
@@ -571,6 +631,7 @@ std::string Sensors::CreateSensor(const Entity &_entity,
 
 IGNITION_ADD_PLUGIN(Sensors, System,
   Sensors::ISystemConfigure,
+  Sensors::ISystemUpdate,
   Sensors::ISystemPostUpdate
 )
 

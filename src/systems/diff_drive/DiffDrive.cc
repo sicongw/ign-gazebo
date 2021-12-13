@@ -28,6 +28,7 @@
 #include <ignition/common/Profiler.hh>
 #include <ignition/math/DiffDriveOdometry.hh>
 #include <ignition/math/Quaternion.hh>
+#include <ignition/math/SpeedLimiter.hh>
 #include <ignition/plugin/Register.hh>
 #include <ignition/transport/Node.hh>
 
@@ -36,8 +37,7 @@
 #include "ignition/gazebo/components/JointVelocityCmd.hh"
 #include "ignition/gazebo/Link.hh"
 #include "ignition/gazebo/Model.hh"
-
-#include "SpeedLimiter.hh"
+#include "ignition/gazebo/Util.hh"
 
 using namespace ignition;
 using namespace gazebo;
@@ -60,6 +60,10 @@ class ignition::gazebo::systems::DiffDrivePrivate
   /// \brief Callback for velocity subscription
   /// \param[in] _msg Velocity message
   public: void OnCmdVel(const ignition::msgs::Twist &_msg);
+
+  /// \brief Callback for enable/disable subscription
+  /// \param[in] _msg Boolean message
+  public: void OnEnable(const ignition::msgs::Boolean &_msg);
 
   /// \brief Update odometry and publish an odometry message.
   /// \param[in] _info System update information.
@@ -120,11 +124,14 @@ class ignition::gazebo::systems::DiffDrivePrivate
   /// \brief Diff drive odometry message publisher.
   public: transport::Node::Publisher odomPub;
 
+  /// \brief Diff drive tf message publisher.
+  public: transport::Node::Publisher tfPub;
+
   /// \brief Linear velocity limiter.
-  public: std::unique_ptr<SpeedLimiter> limiterLin;
+  public: std::unique_ptr<ignition::math::SpeedLimiter> limiterLin;
 
   /// \brief Angular velocity limiter.
-  public: std::unique_ptr<SpeedLimiter> limiterAng;
+  public: std::unique_ptr<ignition::math::SpeedLimiter> limiterAng;
 
   /// \brief Previous control command.
   public: Commands last0Cmd;
@@ -135,8 +142,17 @@ class ignition::gazebo::systems::DiffDrivePrivate
   /// \brief Last target velocity requested.
   public: msgs::Twist targetVel;
 
+  /// \brief Enable/disable state of the controller.
+  public: bool enabled;
+
   /// \brief A mutex to protect the target velocity command.
   public: std::mutex mutex;
+
+  /// \brief frame_id from sdf.
+  public: std::string sdfFrameId;
+
+  /// \brief child_frame_id from sdf.
+  public: std::string sdfChildFrameId;
 };
 
 //////////////////////////////////////////////////
@@ -189,56 +205,47 @@ void DiffDrive::Configure(const Entity &_entity,
   this->dataPtr->wheelRadius = _sdf->Get<double>("wheel_radius",
       this->dataPtr->wheelRadius).first;
 
-  // Parse speed limiter parameters.
-  bool hasVelocityLimits     = false;
-  bool hasAccelerationLimits = false;
-  bool hasJerkLimits         = false;
-  double minVel              = std::numeric_limits<double>::lowest();
-  double maxVel              = std::numeric_limits<double>::max();
-  double minAccel            = std::numeric_limits<double>::lowest();
-  double maxAccel            = std::numeric_limits<double>::max();
-  double minJerk             = std::numeric_limits<double>::lowest();
-  double maxJerk             = std::numeric_limits<double>::max();
+  // Instantiate the speed limiters.
+  this->dataPtr->limiterLin = std::make_unique<ignition::math::SpeedLimiter>();
+  this->dataPtr->limiterAng = std::make_unique<ignition::math::SpeedLimiter>();
 
+  // Parse speed limiter parameters.
   if (_sdf->HasElement("min_velocity"))
   {
-    minVel = _sdf->Get<double>("min_velocity");
-    hasVelocityLimits = true;
+    const double minVel = _sdf->Get<double>("min_velocity");
+    this->dataPtr->limiterLin->SetMinVelocity(minVel);
+    this->dataPtr->limiterAng->SetMinVelocity(minVel);
   }
   if (_sdf->HasElement("max_velocity"))
   {
-    maxVel = _sdf->Get<double>("max_velocity");
-    hasVelocityLimits = true;
+    const double maxVel = _sdf->Get<double>("max_velocity");
+    this->dataPtr->limiterLin->SetMaxVelocity(maxVel);
+    this->dataPtr->limiterAng->SetMaxVelocity(maxVel);
   }
   if (_sdf->HasElement("min_acceleration"))
   {
-    minAccel = _sdf->Get<double>("min_acceleration");
-    hasAccelerationLimits = true;
+    const double minAccel = _sdf->Get<double>("min_acceleration");
+    this->dataPtr->limiterLin->SetMinAcceleration(minAccel);
+    this->dataPtr->limiterAng->SetMinAcceleration(minAccel);
   }
   if (_sdf->HasElement("max_acceleration"))
   {
-    maxAccel = _sdf->Get<double>("max_acceleration");
-    hasAccelerationLimits = true;
+    const double maxAccel = _sdf->Get<double>("max_acceleration");
+    this->dataPtr->limiterLin->SetMaxAcceleration(maxAccel);
+    this->dataPtr->limiterAng->SetMaxAcceleration(maxAccel);
   }
   if (_sdf->HasElement("min_jerk"))
   {
-    minJerk = _sdf->Get<double>("min_jerk");
-    hasJerkLimits = true;
+    const double minJerk = _sdf->Get<double>("min_jerk");
+    this->dataPtr->limiterLin->SetMinJerk(minJerk);
+    this->dataPtr->limiterAng->SetMinJerk(minJerk);
   }
   if (_sdf->HasElement("max_jerk"))
   {
-    maxJerk = _sdf->Get<double>("max_jerk");
-    hasJerkLimits = true;
+    const double maxJerk = _sdf->Get<double>("max_jerk");
+    this->dataPtr->limiterLin->SetMaxJerk(maxJerk);
+    this->dataPtr->limiterAng->SetMaxJerk(maxJerk);
   }
-
-  // Instantiate the speed limiters.
-  this->dataPtr->limiterLin = std::make_unique<SpeedLimiter>(
-    hasVelocityLimits, hasAccelerationLimits, hasJerkLimits,
-    minVel, maxVel, minAccel, maxAccel, minJerk, maxJerk);
-
-  this->dataPtr->limiterAng = std::make_unique<SpeedLimiter>(
-    hasVelocityLimits, hasAccelerationLimits, hasJerkLimits,
-    minVel, maxVel, minAccel, maxAccel, minJerk, maxJerk);
 
   double odomFreq = _sdf->Get<double>("odom_publish_frequency", 50).first;
   if (odomFreq > 0)
@@ -253,18 +260,50 @@ void DiffDrive::Configure(const Entity &_entity,
       this->dataPtr->wheelRadius, this->dataPtr->wheelRadius);
 
   // Subscribe to commands
-  std::string topic{"/model/" + this->dataPtr->model.Name(_ecm) + "/cmd_vel"};
+  std::vector<std::string> topics;
   if (_sdf->HasElement("topic"))
-    topic = _sdf->Get<std::string>("topic");
+  {
+    topics.push_back(_sdf->Get<std::string>("topic"));
+  }
+  topics.push_back("/model/" + this->dataPtr->model.Name(_ecm) + "/cmd_vel");
+  auto topic = validTopic(topics);
+
   this->dataPtr->node.Subscribe(topic, &DiffDrivePrivate::OnCmdVel,
       this->dataPtr.get());
 
-  std::string odomTopic{"/model/" + this->dataPtr->model.Name(_ecm) +
-    "/odometry"};
+  // Subscribe to enable/disable
+  std::vector<std::string> enableTopics{"/model/" +
+      this->dataPtr->model.Name(_ecm) + "/enable"};
+  auto enableTopic = validTopic(enableTopics);
+
+  this->dataPtr->node.Subscribe(enableTopic, &DiffDrivePrivate::OnEnable,
+      this->dataPtr.get());
+  this->dataPtr->enabled = true;
+
+  std::vector<std::string> odomTopics;
   if (_sdf->HasElement("odom_topic"))
-    odomTopic = _sdf->Get<std::string>("odom_topic");
+  {
+    odomTopics.push_back(_sdf->Get<std::string>("odom_topic"));
+  }
+  odomTopics.push_back("/model/" + this->dataPtr->model.Name(_ecm) +
+      "/odometry");
+  auto odomTopic = validTopic(odomTopics);
+
   this->dataPtr->odomPub = this->dataPtr->node.Advertise<msgs::Odometry>(
       odomTopic);
+
+  std::string tfTopic{"/model/" + this->dataPtr->model.Name(_ecm) +
+    "/tf"};
+  if (_sdf->HasElement("tf_topic"))
+    tfTopic = _sdf->Get<std::string>("tf_topic");
+  this->dataPtr->tfPub = this->dataPtr->node.Advertise<msgs::Pose_V>(
+      tfTopic);
+
+  if (_sdf->HasElement("frame_id"))
+    this->dataPtr->sdfFrameId = _sdf->Get<std::string>("frame_id");
+
+  if (_sdf->HasElement("child_frame_id"))
+    this->dataPtr->sdfChildFrameId = _sdf->Get<std::string>("child_frame_id");
 
   ignmsg << "DiffDrive subscribing to twist messages on [" << topic << "]"
          << std::endl;
@@ -338,6 +377,10 @@ void DiffDrive::PreUpdate(const ignition::gazebo::UpdateInfo &_info,
 
   for (Entity joint : this->dataPtr->leftJoints)
   {
+    // skip this entity if it has been removed
+    if (!_ecm.HasEntity(joint))
+      continue;
+
     // Update wheel velocity
     auto vel = _ecm.Component<components::JointVelocityCmd>(joint);
 
@@ -354,6 +397,10 @@ void DiffDrive::PreUpdate(const ignition::gazebo::UpdateInfo &_info,
 
   for (Entity joint : this->dataPtr->rightJoints)
   {
+    // skip this entity if it has been removed
+    if (!_ecm.HasEntity(joint))
+      continue;
+
     // Update wheel velocity
     auto vel = _ecm.Component<components::JointVelocityCmd>(joint);
 
@@ -372,7 +419,7 @@ void DiffDrive::PreUpdate(const ignition::gazebo::UpdateInfo &_info,
   // don't exist.
   auto leftPos = _ecm.Component<components::JointPosition>(
       this->dataPtr->leftJoints[0]);
-  if (!leftPos)
+  if (!leftPos && _ecm.HasEntity(this->dataPtr->leftJoints[0]))
   {
     _ecm.CreateComponent(this->dataPtr->leftJoints[0],
         components::JointPosition());
@@ -380,7 +427,7 @@ void DiffDrive::PreUpdate(const ignition::gazebo::UpdateInfo &_info,
 
   auto rightPos = _ecm.Component<components::JointPosition>(
       this->dataPtr->rightJoints[0]);
-  if (!rightPos)
+  if (!rightPos && _ecm.HasEntity(this->dataPtr->rightJoints[0]))
   {
     _ecm.CreateComponent(this->dataPtr->rightJoints[0],
         components::JointPosition());
@@ -457,18 +504,42 @@ void DiffDrivePrivate::UpdateOdometry(const ignition::gazebo::UpdateInfo &_info,
   // Set the frame id.
   auto frame = msg.mutable_header()->add_data();
   frame->set_key("frame_id");
-  frame->add_value(this->model.Name(_ecm) + "/odom");
+  if (this->sdfFrameId.empty())
+  {
+    frame->add_value(this->model.Name(_ecm) + "/odom");
+  }
+  else
+  {
+    frame->add_value(this->sdfFrameId);
+  }
 
   std::optional<std::string> linkName = this->canonicalLink.Name(_ecm);
-  if (linkName)
+  if (this->sdfChildFrameId.empty())
+  {
+    if (linkName)
+    {
+      auto childFrame = msg.mutable_header()->add_data();
+      childFrame->set_key("child_frame_id");
+      childFrame->add_value(this->model.Name(_ecm) + "/" + *linkName);
+    }
+  }
+  else
   {
     auto childFrame = msg.mutable_header()->add_data();
     childFrame->set_key("child_frame_id");
-    childFrame->add_value(this->model.Name(_ecm) + "/" + *linkName);
+    childFrame->add_value(this->sdfChildFrameId);
   }
 
-  // Publish the message
+  // Construct the Pose_V/tf message and publish it.
+  msgs::Pose_V tfMsg;
+  ignition::msgs::Pose *tfMsgPose = tfMsg.add_pose();
+  tfMsgPose->mutable_header()->CopyFrom(*msg.mutable_header());
+  tfMsgPose->mutable_position()->CopyFrom(msg.mutable_pose()->position());
+  tfMsgPose->mutable_orientation()->CopyFrom(msg.mutable_pose()->orientation());
+
+  // Publish the messages
   this->odomPub.Publish(msg);
+  this->tfPub.Publish(tfMsg);
 }
 
 //////////////////////////////////////////////////
@@ -485,11 +556,11 @@ void DiffDrivePrivate::UpdateVelocity(const ignition::gazebo::UpdateInfo &_info,
     angVel = this->targetVel.angular().z();
   }
 
-  const double dt = std::chrono::duration<double>(_info.dt).count();
-
   // Limit the target velocity if needed.
-  this->limiterLin->Limit(linVel, this->last0Cmd.lin, this->last1Cmd.lin, dt);
-  this->limiterAng->Limit(angVel, this->last0Cmd.ang, this->last1Cmd.ang, dt);
+  this->limiterLin->Limit(
+      linVel, this->last0Cmd.lin, this->last1Cmd.lin, _info.dt);
+  this->limiterAng->Limit(
+      angVel, this->last0Cmd.ang, this->last1Cmd.ang, _info.dt);
 
   // Update history of commands.
   this->last1Cmd = last0Cmd;
@@ -507,7 +578,23 @@ void DiffDrivePrivate::UpdateVelocity(const ignition::gazebo::UpdateInfo &_info,
 void DiffDrivePrivate::OnCmdVel(const msgs::Twist &_msg)
 {
   std::lock_guard<std::mutex> lock(this->mutex);
-  this->targetVel = _msg;
+  if (this->enabled)
+  {
+    this->targetVel = _msg;
+  }
+}
+
+//////////////////////////////////////////////////
+void DiffDrivePrivate::OnEnable(const msgs::Boolean &_msg)
+{
+  std::lock_guard<std::mutex> lock(this->mutex);
+  this->enabled = _msg.data();
+  if (!this->enabled)
+  {
+    math::Vector3d zeroVector{0, 0, 0};
+    msgs::Set(this->targetVel.mutable_linear(), zeroVector);
+    msgs::Set(this->targetVel.mutable_angular(), zeroVector);
+  }
 }
 
 IGNITION_ADD_PLUGIN(DiffDrive,

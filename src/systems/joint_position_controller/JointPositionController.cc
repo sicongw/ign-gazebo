@@ -20,6 +20,7 @@
 #include <ignition/msgs/double.pb.h>
 
 #include <string>
+#include <unordered_set>
 
 #include <ignition/common/Profiler.hh>
 #include <ignition/math/PID.hh>
@@ -147,9 +148,28 @@ void JointPositionController::Configure(const Entity &_entity,
   this->dataPtr->posPid.Init(p, i, d, iMax, iMin, cmdMax, cmdMin, cmdOffset);
 
   // Subscribe to commands
-  std::string topic{"/model/" + this->dataPtr->model.Name(_ecm) +
-                    "/joint/" + this->dataPtr->jointName + "/" +
-                    std::to_string(this->dataPtr->jointIndex) + "/cmd_pos"};
+  std::string topic = transport::TopicUtils::AsValidTopic("/model/" +
+      this->dataPtr->model.Name(_ecm) + "/joint/" + this->dataPtr->jointName +
+      "/" + std::to_string(this->dataPtr->jointIndex) + "/cmd_pos");
+  if (topic.empty())
+  {
+    ignerr << "Failed to create topic for joint [" << this->dataPtr->jointName
+           << "]" << std::endl;
+    return;
+  }
+  if (_sdf->HasElement("topic"))
+  {
+    topic = transport::TopicUtils::AsValidTopic(
+        _sdf->Get<std::string>("topic"));
+
+    if (topic.empty())
+    {
+      ignerr << "Failed to create topic [" << _sdf->Get<std::string>("topic")
+             << "]" << " for joint [" << this->dataPtr->jointName
+             << "]" << std::endl;
+      return;
+    }
+  }
   this->dataPtr->node.Subscribe(
       topic, &JointPositionControllerPrivate::OnCmdPos, this->dataPtr.get());
 
@@ -202,21 +222,24 @@ void JointPositionController::PreUpdate(
     _ecm.CreateComponent(
         this->dataPtr->jointEntity, components::JointPosition());
   }
-  if (jointPosComp == nullptr)
+  // We just created the joint position component, give one iteration for the
+  // physics system to update its size
+  if (jointPosComp == nullptr || jointPosComp->Data().empty())
     return;
 
   // Sanity check: Make sure that the joint index is valid.
   if (this->dataPtr->jointIndex >= jointPosComp->Data().size())
   {
-    static bool invalidJointReported = false;
-    if (!invalidJointReported)
+    static std::unordered_set<Entity> reported;
+    if (reported.find(this->dataPtr->jointEntity) == reported.end())
     {
       ignerr << "[JointPositionController]: Detected an invalid <joint_index> "
              << "parameter. The index specified is ["
-             << this->dataPtr->jointIndex << "] but the joint only has ["
+             << this->dataPtr->jointIndex << "] but joint ["
+             << this->dataPtr->jointName << "] only has ["
              << jointPosComp->Data().size() << "] index[es]. "
              << "This controller will be ignored" << std::endl;
-      invalidJointReported = true;
+      reported.insert(this->dataPtr->jointEntity);
     }
     return;
   }

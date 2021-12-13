@@ -20,6 +20,7 @@
 #include <ignition/msgs/imu.pb.h>
 
 #include <ignition/common/Console.hh>
+#include <ignition/common/Util.hh>
 #include <ignition/math/Pose3.hh>
 #include <ignition/transport/Node.hh>
 
@@ -36,6 +37,7 @@
 #include "ignition/gazebo/test_config.hh"
 
 #include "../helpers/Relay.hh"
+#include "../helpers/EnvTestFixture.hh"
 
 #define TOL 1e-4
 
@@ -43,15 +45,8 @@ using namespace ignition;
 using namespace gazebo;
 
 /// \brief Test ImuTest system
-class ImuTest : public ::testing::Test
+class ImuTest : public InternalFixture<::testing::Test>
 {
-  // Documentation inherited
-  protected: void SetUp() override
-  {
-    ignition::common::Console::SetVerbosity(4);
-    setenv("IGN_GAZEBO_SYSTEM_PLUGIN_PATH",
-           (std::string(PROJECT_BINARY_PATH) + "/lib").c_str(), 1);
-  }
 };
 
 std::mutex mutex;
@@ -209,5 +204,45 @@ TEST_F(ImuTest, ModelFalling)
   std::string scopedName = "imu_model::link::imu_sensor";
   mutex.lock();
   EXPECT_EQ(imuMsgs.back().entity_name(), scopedName);
+  mutex.unlock();
+}
+
+/////////////////////////////////////////////////
+// The test checks to make sure orientation is not published if it is deabled
+TEST_F(ImuTest, OrientationDisabled)
+{
+  imuMsgs.clear();
+
+  // Start server
+  ServerConfig serverConfig;
+  const auto sdfFile = common::joinPaths(std::string(PROJECT_SOURCE_PATH),
+    "test", "worlds", "imu_no_orientation.sdf");
+  serverConfig.SetSdfFile(sdfFile);
+
+  Server server(serverConfig);
+  EXPECT_FALSE(server.Running());
+  EXPECT_FALSE(*server.Running(0));
+
+  const std::string sensorName = "imu_sensor";
+
+  auto topic =
+      "world/imu_sensor/model/imu_model/link/link/sensor/imu_sensor/imu";
+
+  // subscribe to imu topic
+  transport::Node node;
+  node.Subscribe(topic, &imuCb);
+
+  // step world and verify imu's orientation is not published
+  // Run server
+  size_t iters200 = 200u;
+  server.Run(true, iters200, false);
+
+  // Check we received messages
+  EXPECT_GT(imuMsgs.size(), 0u);
+  mutex.lock();
+  for (const auto &msg : imuMsgs)
+  {
+    EXPECT_FALSE(msg.has_orientation());
+  }
   mutex.unlock();
 }

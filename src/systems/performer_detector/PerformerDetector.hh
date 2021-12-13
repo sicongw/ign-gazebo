@@ -51,10 +51,12 @@ namespace systems
   /// header will contain the key "frame_id" with a value set to the name of
   /// the model containing the PerformerDetector system and the key "state" with
   /// a value set to "1" if the performer is entering the detector's region and
-  /// "0" if the performer is leaving the region.
+  /// "0" if the performer is leaving the region. The `data` field of the
+  /// header will also contain the key "count" with a value set to the
+  /// number of performers currently in the region.
   ///
-  /// The PerformerDetector has to be attached to a <model> and it's region is
-  /// centered on the containing model's origin.
+  /// The PerformerDetector has to be attached to a `<model>` and it's region
+  /// is centered on the containing model's origin.
   ///
   /// The system does not assume that levels are enabled, but it does require
   /// performers to be specified.
@@ -77,7 +79,7 @@ namespace systems
   /// contents are interpreted as strings. Keys value pairs are stored in a
   /// map, which means the keys are unique.
 
-  class IGNITION_GAZEBO_VISIBLE PerformerDetector
+  class PerformerDetector
       : public System,
         public ISystemConfigure,
         public ISystemPostUpdate

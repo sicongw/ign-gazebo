@@ -19,6 +19,7 @@
 #include <mutex>
 
 #include <ignition/common/Console.hh>
+#include <ignition/common/Util.hh>
 #include <ignition/math/Pose3.hh>
 #include <ignition/transport/Node.hh>
 
@@ -32,6 +33,7 @@
 #include "ignition/gazebo/test_config.hh"
 
 #include "../helpers/Relay.hh"
+#include "../helpers/EnvTestFixture.hh"
 
 #define tol 10e-4
 
@@ -39,15 +41,8 @@ using namespace ignition;
 using namespace gazebo;
 
 /// \brief Test PosePublisher system
-class PosePublisherTest : public ::testing::TestWithParam<int>
+class PosePublisherTest : public InternalFixture<::testing::TestWithParam<int>>
 {
-  // Documentation inherited
-  protected: void SetUp() override
-  {
-    common::Console::SetVerbosity(4);
-    setenv("IGN_GAZEBO_SYSTEM_PLUGIN_PATH",
-           (std::string(PROJECT_BINARY_PATH) + "/lib").c_str(), 1);
-  }
 };
 
 std::mutex mutex;

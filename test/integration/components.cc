@@ -17,6 +17,8 @@
 
 #include <gtest/gtest.h>
 
+#include <ignition/msgs/particle_emitter.pb.h>
+
 #include <chrono>
 
 #include <sdf/Cylinder.hh>
@@ -45,6 +47,9 @@
 #include "ignition/gazebo/components/Inertial.hh"
 #include "ignition/gazebo/components/Joint.hh"
 #include "ignition/gazebo/components/JointAxis.hh"
+#include "ignition/gazebo/components/JointEffortLimitsCmd.hh"
+#include "ignition/gazebo/components/JointPositionLimitsCmd.hh"
+#include "ignition/gazebo/components/JointVelocityLimitsCmd.hh"
 #include "ignition/gazebo/components/JointType.hh"
 #include "ignition/gazebo/components/JointVelocity.hh"
 #include "ignition/gazebo/components/JointVelocityCmd.hh"
@@ -62,6 +67,7 @@
 #include "ignition/gazebo/components/Name.hh"
 #include "ignition/gazebo/components/ParentEntity.hh"
 #include "ignition/gazebo/components/ParentLinkName.hh"
+#include "ignition/gazebo/components/ParticleEmitter.hh"
 #include "ignition/gazebo/components/Performer.hh"
 #include "ignition/gazebo/components/PerformerAffinity.hh"
 #include "ignition/gazebo/components/PerformerLevels.hh"
@@ -71,21 +77,18 @@
 #include "ignition/gazebo/components/Sensor.hh"
 #include "ignition/gazebo/components/SourceFilePath.hh"
 #include "ignition/gazebo/components/Static.hh"
+#include "ignition/gazebo/components/TemperatureRange.hh"
 #include "ignition/gazebo/components/ThreadPitch.hh"
 #include "ignition/gazebo/components/Visual.hh"
 #include "ignition/gazebo/components/World.hh"
 #include "ignition/gazebo/test_config.hh"  // NOLINT(build/include)
-
+#include "../helpers/EnvTestFixture.hh"
 
 using namespace ignition;
 using namespace gazebo;
 
-class ComponentsTest : public ::testing::Test
+class ComponentsTest : public InternalFixture<::testing::Test>
 {
-  protected: void SetUp() override
-  {
-    common::Console::SetVerbosity(4);
-  }
 };
 
 /////////////////////////////////////////////////
@@ -592,6 +595,121 @@ TEST_F(ComponentsTest, JointAxis)
 }
 
 /////////////////////////////////////////////////
+TEST_F(ComponentsTest, JointEffortLimitsCmd)
+{
+  // Create components
+  auto comp1 = components::JointEffortLimitsCmd();
+  auto comp2 = components::JointEffortLimitsCmd();
+
+  // Equality operators
+  EXPECT_EQ(comp1, comp2);
+  EXPECT_TRUE(comp1 == comp2);
+  EXPECT_FALSE(comp1 != comp2);
+
+  // Stream operators
+  std::ostringstream ostr;
+  comp1.Serialize(ostr);
+  EXPECT_EQ("0", ostr.str());
+
+  comp2.Data().push_back(math::Vector2d(-1.0, 1.0));
+
+  std::ostringstream ostr2;
+  comp2.Serialize(ostr2);
+  EXPECT_EQ("1 -1 1", ostr2.str());
+
+  comp2.Data().push_back(math::Vector2d(-2.5, 2.5));
+
+  std::ostringstream ostr3;
+  comp2.Serialize(ostr3);
+  EXPECT_EQ("2 -1 1 -2.5 2.5", ostr3.str());
+
+  std::istringstream istr("ignored");
+  components::JointEffortLimitsCmd comp3;
+  comp3.Deserialize(istr);
+}
+
+/////////////////////////////////////////////////
+TEST_F(ComponentsTest, JointPositionLimitsCmd)
+{
+  // Create components
+  auto comp1 = components::JointPositionLimitsCmd();
+  auto comp2 = components::JointPositionLimitsCmd();
+  components::JointPositionLimitsCmd comp3;
+
+  // Equality operators
+  EXPECT_EQ(comp1, comp2);
+  EXPECT_TRUE(comp1 == comp2);
+  EXPECT_FALSE(comp1 != comp2);
+
+  // Stream operators
+  std::ostringstream ostr;
+  comp1.Serialize(ostr);
+  EXPECT_EQ("0", ostr.str());
+
+  auto istr = std::istringstream(ostr.str());
+  comp3.Deserialize(istr);
+  EXPECT_EQ(comp1, comp3);
+
+  comp2.Data().push_back(math::Vector2d(-1.0, 1.0));
+
+  std::ostringstream ostr2;
+  comp2.Serialize(ostr2);
+  EXPECT_EQ("1 -1 1", ostr2.str());
+
+  istr = std::istringstream(ostr2.str());
+  comp3.Deserialize(istr);
+  EXPECT_EQ(comp2, comp3);
+
+  comp2.Data().push_back(math::Vector2d(-2.5, 2.5));
+
+  std::ostringstream ostr3;
+  comp2.Serialize(ostr3);
+  EXPECT_EQ("2 -1 1 -2.5 2.5", ostr3.str());
+
+  istr = std::istringstream(ostr3.str());
+  comp3.Deserialize(istr);
+  EXPECT_EQ(comp2, comp3);
+
+  istr = std::istringstream("ignored");
+  comp3.Deserialize(istr);
+  EXPECT_EQ(comp1, comp3);
+}
+
+/////////////////////////////////////////////////
+TEST_F(ComponentsTest, JointVelocityLimitsCmd)
+{
+  // Create components
+  auto comp1 = components::JointVelocityLimitsCmd();
+  auto comp2 = components::JointVelocityLimitsCmd();
+
+  // Equality operators
+  EXPECT_EQ(comp1, comp2);
+  EXPECT_TRUE(comp1 == comp2);
+  EXPECT_FALSE(comp1 != comp2);
+
+  // Stream operators
+  std::ostringstream ostr;
+  comp1.Serialize(ostr);
+  EXPECT_EQ("0", ostr.str());
+
+  comp2.Data().push_back(math::Vector2d(-1.0, 1.0));
+
+  std::ostringstream ostr2;
+  comp2.Serialize(ostr2);
+  EXPECT_EQ("1 -1 1", ostr2.str());
+
+  comp2.Data().push_back(math::Vector2d(-2.5, 2.5));
+
+  std::ostringstream ostr3;
+  comp2.Serialize(ostr3);
+  EXPECT_EQ("2 -1 1 -2.5 2.5", ostr3.str());
+
+  std::istringstream istr("ignored");
+  components::JointVelocityLimitsCmd comp3;
+  comp3.Deserialize(istr);
+}
+
+/////////////////////////////////////////////////
 TEST_F(ComponentsTest, JointType)
 {
   auto data1 = sdf::JointType::FIXED;
@@ -939,31 +1057,33 @@ TEST_F(ComponentsTest, LogicalAudioSourcePlayInfo)
 TEST_F(ComponentsTest, LogicalMicrophone)
 {
   logical_audio::Microphone mic1;
-  mic1.id = 0;
+  mic1.id = 4;
   mic1.volumeDetectionThreshold = 0.5;
 
   logical_audio::Microphone mic2;
-  mic2.id = 1;
-  mic2.volumeDetectionThreshold = mic1.volumeDetectionThreshold;
+  mic2.id = 8;
+  mic2.volumeDetectionThreshold = 0.8;
 
   // create components
   auto comp1 = components::LogicalMicrophone(mic1);
   auto comp2 = components::LogicalMicrophone(mic2);
 
   // equality operators
-  EXPECT_NE(mic1, mic2);
-  EXPECT_FALSE(mic1 == mic2);
-  EXPECT_TRUE(mic1 != mic2);
+  EXPECT_NE(comp1, comp2);
+  EXPECT_FALSE(comp1 == comp2);
+  EXPECT_TRUE(comp1 != comp2);
 
   // stream operators
   std::ostringstream ostr;
   comp1.Serialize(ostr);
-  EXPECT_EQ("0 0.5", ostr.str());
+  EXPECT_EQ("4 0.5", ostr.str());
 
-  std::istringstream istr;
+  std::istringstream istr(ostr.str());
   components::LogicalMicrophone comp3;
   comp3.Deserialize(istr);
   EXPECT_EQ(comp1, comp3);
+  EXPECT_DOUBLE_EQ(comp1.Data().volumeDetectionThreshold,
+      comp3.Data().volumeDetectionThreshold);
 }
 
 /////////////////////////////////////////////////
@@ -1377,6 +1497,45 @@ TEST_F(ComponentsTest, Static)
 }
 
 /////////////////////////////////////////////////
+TEST_F(ComponentsTest, TemperatureRange)
+{
+  // TODO(adlarkin) make sure min can't be >= max?
+  components::TemperatureRangeInfo range1;
+  range1.min = math::Temperature(125.0);
+  range1.max = math::Temperature(300.0);
+
+  components::TemperatureRangeInfo range2;
+  range2.min = math::Temperature(140.0);
+  range2.max = math::Temperature(200.0);
+
+  components::TemperatureRangeInfo range3;
+  range3.min = math::Temperature(125.0);
+  range3.max = math::Temperature(300.0);
+
+  // Create components
+  auto comp1 = components::TemperatureRange(range1);
+  auto comp2 = components::TemperatureRange(range2);
+  auto comp3 = components::TemperatureRange(range3);
+
+  // Equality operators
+  EXPECT_EQ(comp1, comp3);
+  EXPECT_NE(comp1, comp2);
+  EXPECT_NE(comp2, comp3);
+  EXPECT_FALSE(comp1 == comp2);
+  EXPECT_TRUE(comp1 != comp2);
+
+  // Stream operators
+  std::ostringstream ostr;
+  comp1.Serialize(ostr);
+  EXPECT_EQ("125 300", ostr.str());
+
+  std::istringstream istr(ostr.str());
+  components::TemperatureRange comp4;
+  comp4.Deserialize(istr);
+  EXPECT_EQ(comp1, comp4);
+}
+
+/////////////////////////////////////////////////
 TEST_F(ComponentsTest, ThreadPitch)
 {
   // Create components
@@ -1465,4 +1624,96 @@ TEST_F(ComponentsTest, Scene)
   EXPECT_TRUE(comp3.Data().Shadows());
   EXPECT_FALSE(comp3.Data().Grid());
   EXPECT_TRUE(comp3.Data().OriginVisual());
+}
+
+//////////////////////////////////////////////////
+TEST_F(ComponentsTest, ParticleEmitter)
+{
+  msgs::ParticleEmitter emitter1;
+  emitter1.set_name("emitter1");
+  emitter1.set_id(0);
+  emitter1.set_type(ignition::msgs::ParticleEmitter_EmitterType_BOX);
+  emitter1.mutable_size()->set_x(1);
+  emitter1.mutable_size()->set_y(2);
+  emitter1.mutable_size()->set_z(3);
+  emitter1.mutable_rate()->set_data(4.0);
+  emitter1.mutable_duration()->set_data(5.0);
+  emitter1.mutable_emitting()->set_data(false);
+  emitter1.mutable_particle_size()->set_x(0.1);
+  emitter1.mutable_particle_size()->set_y(0.2);
+  emitter1.mutable_particle_size()->set_z(0.3);
+  emitter1.mutable_lifetime()->set_data(6.0);
+  emitter1.mutable_min_velocity()->set_data(7.0);
+  emitter1.mutable_max_velocity()->set_data(8.0);
+  emitter1.mutable_color_start()->set_r(1.0);
+  emitter1.mutable_color_start()->set_g(0);
+  emitter1.mutable_color_start()->set_b(0);
+  emitter1.mutable_color_start()->set_a(0);
+  emitter1.mutable_color_end()->set_r(1.0);
+  emitter1.mutable_color_end()->set_g(1.0);
+  emitter1.mutable_color_end()->set_b(1.0);
+  emitter1.mutable_color_end()->set_a(0);
+  emitter1.mutable_scale_rate()->set_data(9.0);
+  emitter1.mutable_color_range_image()->set_data("path_to_texture");
+
+  msgs::ParticleEmitter emitter2;
+  emitter2.set_name("emitter2");
+  emitter2.set_id(1);
+  emitter2.set_type(ignition::msgs::ParticleEmitter_EmitterType_BOX);
+  emitter2.mutable_size()->set_x(1);
+  emitter2.mutable_size()->set_y(2);
+  emitter2.mutable_size()->set_z(3);
+  emitter2.mutable_rate()->set_data(4.0);
+  emitter2.mutable_duration()->set_data(5.0);
+  emitter2.mutable_emitting()->set_data(false);
+  emitter2.mutable_particle_size()->set_x(0.1);
+  emitter2.mutable_particle_size()->set_y(0.2);
+  emitter2.mutable_particle_size()->set_z(0.3);
+  emitter2.mutable_lifetime()->set_data(6.0);
+  emitter2.mutable_min_velocity()->set_data(7.0);
+  emitter2.mutable_max_velocity()->set_data(8.0);
+  emitter2.mutable_color_start()->set_r(1.0);
+  emitter2.mutable_color_start()->set_g(0);
+  emitter2.mutable_color_start()->set_b(0);
+  emitter2.mutable_color_start()->set_a(0);
+  emitter2.mutable_color_end()->set_r(1.0);
+  emitter2.mutable_color_end()->set_g(1.0);
+  emitter2.mutable_color_end()->set_b(1.0);
+  emitter2.mutable_color_end()->set_a(0);
+  emitter2.mutable_scale_rate()->set_data(9.0);
+  emitter2.mutable_color_range_image()->set_data("path_to_texture");
+
+  // Create components.
+  auto comp1 = components::ParticleEmitter(emitter1);
+  auto comp2 = components::ParticleEmitter(emitter2);
+
+  // Stream operators.
+  std::ostringstream ostr;
+  comp1.Serialize(ostr);
+
+  std::istringstream istr(ostr.str());
+  components::ParticleEmitter comp3;
+  comp3.Deserialize(istr);
+  EXPECT_EQ(comp1.Data().id(), comp3.Data().id());
+}
+
+//////////////////////////////////////////////////
+TEST_F(ComponentsTest, ParticleEmitterCmd)
+{
+  msgs::ParticleEmitter emitter1;
+  emitter1.set_name("emitter1");
+  emitter1.mutable_emitting()->set_data(true);
+
+  // Create components.
+  auto comp1 = components::ParticleEmitterCmd(emitter1);
+
+  // Stream operators.
+  std::ostringstream ostr;
+  comp1.Serialize(ostr);
+
+  std::istringstream istr(ostr.str());
+  components::ParticleEmitter comp3;
+  comp3.Deserialize(istr);
+  EXPECT_EQ(comp1.Data().emitting().data(), comp3.Data().emitting().data());
+  EXPECT_EQ(comp1.Data().name(), comp3.Data().name());
 }

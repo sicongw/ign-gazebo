@@ -20,6 +20,7 @@
 #include <ignition/msgs/image.pb.h>
 
 #include <ignition/common/Console.hh>
+#include <ignition/common/Util.hh>
 #include <ignition/math/Pose3.hh>
 #include <ignition/transport/Node.hh>
 #include <ignition/utilities/ExtraTestMacros.hh>
@@ -28,6 +29,7 @@
 #include "ignition/gazebo/test_config.hh"
 
 #include "plugins/MockSystem.hh"
+#include "../helpers/EnvTestFixture.hh"
 
 #define DEPTH_TOL 1e-4
 
@@ -35,15 +37,8 @@ using namespace ignition;
 using namespace gazebo;
 
 /// \brief Test RgbdCameraTest system
-class RgbdCameraTest : public ::testing::Test
+class RgbdCameraTest : public InternalFixture<::testing::Test>
 {
-  // Documentation inherited
-  protected: void SetUp() override
-  {
-    ignition::common::Console::SetVerbosity(4);
-    setenv("IGN_GAZEBO_SYSTEM_PLUGIN_PATH",
-           (std::string(PROJECT_BINARY_PATH) + "/lib").c_str(), 1);
-  }
 };
 
 std::mutex mutex;
