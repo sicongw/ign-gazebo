@@ -4,7 +4,6 @@ set(tests
   ackermann_steering_system.cc
   air_pressure_system.cc
   altimeter_system.cc
-  gps_system.cc
   apply_joint_force_system.cc
   battery_plugin.cc
   breadcrumbs.cc
@@ -37,6 +36,7 @@ set(tests
   model.cc
   multicopter.cc
   multiple_servers.cc
+  navsat_system.cc
   network_handshake.cc
   odometry_publisher.cc
   particle_emitter.cc

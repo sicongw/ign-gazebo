@@ -113,10 +113,10 @@ ign_find_package(ignition-sensors4 REQUIRED
     altimeter
     camera
     gpu_lidar
-    gps
     imu
     logical_camera
     magnetometer
+    navsat
     depth_camera
     thermal_camera
 )
