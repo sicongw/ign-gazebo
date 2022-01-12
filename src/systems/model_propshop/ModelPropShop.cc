@@ -24,10 +24,14 @@
 #include <ignition/msgs/entity_factory.pb.h>
 #include <ignition/msgs/entity.pb.h>
 
+#include "ignition/gazebo/components/AxisAlignedBox.hh"
 #include "ignition/gazebo/components/Camera.hh"
 #include "ignition/gazebo/components/Name.hh"
 #include "ignition/gazebo/components/Sensor.hh"
 #include "ignition/gazebo/components/World.hh"
+
+#include "ignition/gazebo/Util.hh"
+#include "ignition/gazebo/World.hh"
 
 #include <sdf/Element.hh>
 
@@ -39,9 +43,13 @@ using namespace systems;
 
 class ignition::gazebo::systems::ModelPropShopPrivate
 {
-  public: Entity cameraEntity;
+  public: Entity cameraModelEntity;
 
   public: std::string objectName;
+
+  public: Entity targetModelEntity;
+
+  public: double objectScale;
 
   public: std::string outputFolder;
 
@@ -65,30 +73,63 @@ class ignition::gazebo::systems::ModelPropShopPrivate
 
   public: std::array<ignition::math::Pose3d, 5> views;
 
-  public: ModelPropShopPrivate();
+  public: std::optional<double> computeScale(const Entity &_entity, EntityComponentManager &_ecm);
+
+  public: bool initViewpoints(const Entity& _entity, EntityComponentManager &_ecm);
 };
 
 //////////////////////////////////////////////////
-ModelPropShopPrivate::ModelPropShopPrivate()
+std::optional<double> ModelPropShopPrivate::computeScale(const Entity& _entity, EntityComponentManager &_ecm)
 {
+  // Get the bounding box
+  const auto& aabbComponent =
+      _ecm.Component<components::AxisAlignedBox>(_entity);
+  if (!aabbComponent)
+  {
+    // Initialize bounding box for target object
+    // Get entity number
+    //_entity = world.ModelByName(_ecm, this->objectName);
+    // Add bounding box
+    enableComponent<components::AxisAlignedBox>(_ecm, _entity);
+    return std::nullopt;
+  }
+  auto aabbData = aabbComponent->Data();
+  double maxSize = std::max(aabbData.ZLength(), aabbData.YLength());
+  maxSize = std::max(aabbData.XLength(), maxSize);
+  ignerr << "Max size is " << maxSize << std::endl;
+  return 1.0 / maxSize;
+}
+
+bool ModelPropShopPrivate::initViewpoints(const Entity& _entity, EntityComponentManager &_ecm)
+{
+  auto scale_opt = this->computeScale(_entity, _ecm);
+  if (!scale_opt)
+    return false;
+  // TODO make this depend on camera fov
+  double scale = scale_opt.value();
   ignition::math::Pose3d pose; 
   // Perspective
   // TODO bounding box might help here?
-  pose.Pos().Set(0,0,0);
-  pose.Rot().Euler(IGN_DTOR(0), IGN_DTOR(30), IGN_DTOR(0));
+  pose.Pos().Set(scale*0.75,-scale*0.75,scale*0.5);
+  pose.Rot().Euler(IGN_DTOR(0), IGN_DTOR(30), IGN_DTOR(-225));
   views[0] = pose;
   // Top
+  pose.Pos().Set(0,0,scale);
   pose.Rot().Euler(0, IGN_DTOR(90), 0);
   views[1] = pose;
   // Front
+  pose.Pos().Set(-scale,0,0);
   pose.Rot().Euler(0, 0, 0);
   views[2] = pose;
   // Side
-  pose.Rot().Euler(0, 0, IGN_DTOR(-90));
+  pose.Pos().Set(0,-scale,0);
+  pose.Rot().Euler(0, 0, IGN_DTOR(90));
   views[3] = pose;
   // Back
+  pose.Pos().Set(scale,0,0);
   pose.Rot().Euler(0, 0, IGN_DTOR(180));
   views[4] = pose;
+  return true;
 }
 
 //////////////////////////////////////////////////
@@ -102,7 +143,7 @@ void ModelPropShop::Configure(const Entity &_entity,
                          const std::shared_ptr<const sdf::Element> &_sdf,
                          EntityComponentManager &_ecm, EventManager &)
 {
-  this->dataPtr->cameraEntity = _ecm.ParentEntity(_entity);
+  this->dataPtr->cameraModelEntity = topLevelModel(_entity, _ecm);
   // Make sure attached model has a camera component
   if (!_ecm.EntityHasComponentType(_entity, components::Camera().TypeId()))
   {
@@ -123,8 +164,8 @@ void ModelPropShop::Configure(const Entity &_entity,
   ignition::math::Pose3d pose {0,0,0,0,0,0};
   ignition::msgs::Set(req.mutable_pose(), pose);
 
-  Entity worldEntity = _ecm.EntityByComponents(components::World());
-  std::string worldName = _ecm.Component<components::Name>(worldEntity)->Data();
+  World world(_ecm.EntityByComponents(components::World()));
+  std::string worldName = world.Name(_ecm).value();
 
   std::string spawnService {"/world/" + worldName + "/create"};
   
@@ -153,30 +194,19 @@ void ModelPropShop::PreUpdate(const UpdateInfo &_info, EntityComponentManager &_
   if (this->dataPtr->init == false)
   {
     this->dataPtr->startingTime = curSimTime;
-    this->dataPtr->init = true;
+    this->dataPtr->init = this->dataPtr->initViewpoints(_ecm.EntityByComponents(components::Name(this->dataPtr->objectName)), _ecm);
+    if (!this->dataPtr->init)
+      return;
   }
 
   double dt = curSimTime - this->dataPtr->startingTime;
 
   // Represents the time at which a new frame will be triggered, deadline halfway between frames
-  double nextFrameDeadline = this->dataPtr->cameraFrameInterval * (this->dataPtr->currentView - 0.5);
+  double nextFrameDeadline = this->dataPtr->cameraFrameInterval * (this->dataPtr->currentView);
   // TODO arbitrary value?
-  if (dt > nextFrameDeadline)
+  if (dt >= nextFrameDeadline)
   {
-    ignition::math::Pose3d cameraPose = this->dataPtr->views[this->dataPtr->currentView];
-    ignition::msgs::Pose req {ignition::msgs::Convert(cameraPose)};
-    req.set_name(this->dataPtr->objectName);
-    ignition::msgs::Boolean rep;
-    bool result;
-    bool executed = this->dataPtr->transportNode.Request(this->dataPtr->poseService,
-        req, this->dataPtr->timeout, rep, result);
-    if (executed && result && rep.data())
-      ignmsg << "Pose service call successful" << std::endl;
-    else
-      ignerr << "Pose service call failed" << std::endl;
-    if (this->dataPtr->currentView < this->dataPtr->views.size() - 1)
-      ++this->dataPtr->currentView;
-    else
+    if (this->dataPtr->currentView == this->dataPtr->views.size())
     {
       // Remove the camera
       ignition::msgs::Entity req;
@@ -189,8 +219,20 @@ void ModelPropShop::PreUpdate(const UpdateInfo &_info, EntityComponentManager &_
           req, this->dataPtr->timeout, rep, result);
       if (executed && result && rep.data())
         this->dataPtr->done = true;
+      return;
     }
-    // Will segfault past 5, which is a convenient way to close the simulation
+    ignition::math::Pose3d cameraPose = this->dataPtr->views[this->dataPtr->currentView];
+    ignition::msgs::Pose req {ignition::msgs::Convert(cameraPose)};
+    req.set_name("camera");
+    ignition::msgs::Boolean rep;
+    bool result;
+    bool executed = this->dataPtr->transportNode.Request(this->dataPtr->poseService,
+        req, this->dataPtr->timeout, rep, result);
+    if (executed && result && rep.data())
+      ignmsg << "Pose service call successful" << std::endl;
+    else
+      ignerr << "Pose service call failed" << std::endl;
+    ++this->dataPtr->currentView;
   }
 }
 

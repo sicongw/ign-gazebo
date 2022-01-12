@@ -124,17 +124,9 @@
 
     <model name="camera">
       <static>true</static>
-      <pose>1.0 0.0 0.0 0.0 0.0 3.14</pose>
+      <pose>0.0 0.0 0.0 0.0 0.0 0.0</pose>
       <link name="link">
         <pose>0 0 0 0 0 0</pose>
-        <inertial>
-          <mass>0.1</mass>
-          <inertia>
-            <ixx>0.000166667</ixx>
-            <iyy>0.000166667</iyy>
-            <izz>0.000166667</izz>
-          </inertia>
-        </inertial>
         <collision name="collision">
           <geometry>
             <box>
@@ -164,14 +156,14 @@
               <path>thumbnails</path>
             </save>
           </camera>
-          <always_on>1</always_on>
+          <always_on>0</always_on>
           <update_rate>3</update_rate>
           <visualize>true</visualize>
           <topic>camera</topic>
           <plugin
             filename="libignition-gazebo-model_propshop-system.so"
             name="ignition::gazebo::systems::ModelPropShop">
-            <model_uri>https://fuel.ignitionrobotics.org/1.0/caguero/models/Beer</model_uri>
+            <model_uri>https://fuel.ignitionrobotics.org/1.0/OpenRobotics/models/barcs_qav500_sensor_config_1</model_uri>
           </plugin>
         </sensor>
       </link>
