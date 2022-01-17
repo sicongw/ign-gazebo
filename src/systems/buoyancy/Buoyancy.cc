@@ -222,7 +222,7 @@ std::pair<math::Vector3d, math::Vector3d> BuoyancyPrivate::ResolveForces(
     math::Pose3d localPoint{b.point, math::Quaterniond{1, 0, 0, 0}};
     auto globalPoint = b.pose * localPoint;
     auto offset = globalPoint.Pos() - _pose.Pos();
-    torque += force.Cross(offset);
+    torque += force.Cross(-offset);
   }
 
   return {force, torque};
@@ -472,13 +472,7 @@ void Buoyancy::PreUpdate(const ignition::gazebo::UpdateInfo &_info,
       else if (this->dataPtr->buoyancyType
         == BuoyancyPrivate::BuoyancyType::GRADED_BUOYANCY)
       {
-        if (newPose)
-        {
-          // Skip entity if WorldPose and inertial are not yet ready
-          // TODO(arjo): Find a way of disabling gravity effects for
-          // this first iteration.
-          return true;
-        }
+        
         std::vector<Entity> collisions = _ecm.ChildrenByComponents(
           _entity, components::Collision());
         this->dataPtr->buoyancyForces.clear();
@@ -524,7 +518,8 @@ void Buoyancy::PreUpdate(const ignition::gazebo::UpdateInfo &_info,
           }
         }
         auto [force, torque] = this->dataPtr->ResolveForces(
-        link.WorldInertialPose(_ecm).value());
+          linkWorldPose
+        /*link.WorldInertialPose(_ecm).value()*/);
         // Apply the wrench to the link. This wrench is applied in the
         // Physics System.
         link.AddWorldWrench(_ecm, force, torque);
